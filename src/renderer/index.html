@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'" />
+  <link rel="stylesheet" href="styles.css" />
+  <title>Caster Companion</title>
+</head>
+<body>
+  <header class="logo">
+    <div class="logo-main">CASTER<span class="logo-accent">COMPANION</span></div>
+    <div class="logo-sub">for RØDECaster Pro · unofficial</div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-sounds" class="tab" role="tab">Sounds</button>
+    <button id="tab-podcasts" class="tab active" role="tab">Podcasts</button>
+  </div>
+
+  <!-- ============ PODCASTS ============ -->
+  <section id="page-podcasts" class="page">
+    <div id="not-mounted" class="state">
+      <div class="sd-card">
+        <div class="sd-top">SD CARD</div>
+        <div class="sd-bottom"><span class="sd-size">32<small>GB</small></span><span class="sd-micro">micro</span></div>
+      </div>
+      <p class="hint">Waiting for your RØDECaster Pro…</p>
+      <div class="instructions">
+        <strong>To enter Podcast Transfer Mode:</strong>
+        <ol>
+          <li>Connect the RØDECaster Pro via USB</li>
+          <li>On its touchscreen, tap the <em>SD card icon</em></li>
+          <li>Enable <em>Podcast Transfer Mode</em></li>
+        </ol>
+      </div>
+    </div>
+
+    <div id="mounted" class="state hidden">
+      <div class="mounted-bar">
+        <span id="volume-name" class="volume-name"></span>
+        <button id="eject" class="small-btn">Eject</button>
+      </div>
+      <div id="session-list" class="session-list"></div>
+    </div>
+  </section>
+
+  <!-- ============ SOUNDS ============ -->
+  <section id="page-sounds" class="page hidden">
+    <div class="state">
+      <p class="hint">Sound pad upload is not available yet.</p>
+      <div class="instructions">
+        Uploading sounds uses a proprietary USB protocol that hasn't been
+        decoded yet. Device detection below confirms your RØDECaster is seen.
+      </div>
+      <div id="hid-status" class="hid-status">Scanning for RØDE USB devices…</div>
+    </div>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "caster-companion",
+  "productName": "Caster Companion",
+  "version": "1.0.0",
+  "description": "Unofficial Apple Silicon companion app for the original RØDECaster Pro — multitrack podcast export from the microSD card.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "package": "electron-packager . 'Caster Companion' --platform=darwin --arch=arm64 --out=dist --overwrite"
+  },
+  "license": "MIT",
+  "keywords": ["rodecaster", "podcast", "multitrack", "electron", "apple-silicon", "audio"],
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-packager": "^17.1.2",
+    "playwright-core": "^1.60.0"
+  },
+  "dependencies": {
+    "node-hid": "^3.1.0"
+  }
+}
