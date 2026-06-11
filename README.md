@@ -174,6 +174,12 @@ RODE_TEST_VOLUME=/path/to/folder-with-POD-wavs npm start
 - **[docs/SOUND-PADS.md](docs/SOUND-PADS.md)** — status of the sound-pad upload
   feature and a concrete plan for decoding the HID protocol.
 
+## Support
+
+This app is free and MIT-licensed. If it saved your recordings (or your
+RODECaster from retirement), you can
+[buy me a coffee](https://buymeacoffee.com/JeffDwoskinShow) ☕
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
