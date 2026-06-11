@@ -14,6 +14,25 @@ rebuilt so it runs without Rosetta.
 
 ---
 
+## Quick start — turn this repo into an app
+
+You need an Apple Silicon Mac, [Node.js](https://nodejs.org), and ffmpeg
+(`brew install ffmpeg`). Then, in the downloaded repo folder:
+
+```sh
+npm install            # one-time: fetch dependencies
+npm run package        # build the app
+```
+
+That produces **`dist/Caster Companion-darwin-arm64/Caster Companion.app`**.
+Drag it into your **Applications** folder. From then on it's a normal Mac app —
+double-click it (or keep it in your Dock); no terminal needed again.
+
+Full details and the run-from-source path are in
+[Install & run](#install--run) below.
+
+---
+
 ## Why this exists
 
 RØDE's original RODECaster Pro Companion app (`com.rode.rodecasterpro`) is an
