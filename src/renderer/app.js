@@ -229,42 +229,51 @@ async function analyze(s, btn, tracksEl) {
   toast(`Found ${n} active track${n === 1 ? '' : 's'}.`);
 }
 
+function setExportButtonsDisabled(disabled) {
+  for (const b of document.querySelectorAll('.transfer-btn')) b.disabled = disabled;
+  $('eject').disabled = disabled; // ejecting mid-export would kill ffmpeg
+}
+
 async function exportSession(s, card, btn) {
   const st = sessionState[s.id];
+  if (exporting) return; // one export at a time
   if (st.channelKeys.size === 0) return toast('Select at least one track.', true);
-  if (!destDir) {
-    destDir = await window.rode.chooseDestination();
-    if (!destDir) return;
-  }
+  exporting = true; // set before any await so polling can't re-render mid-flow
+  setExportButtonsDisabled(true);
   const progress = card.querySelector('.progress-bar');
-  progress.classList.add('active');
-  card.querySelector('.progress-fill').style.width = '0%';
-  card.querySelector('.progress-label').textContent = '0%';
-  btn.disabled = true;
-  btn.textContent = 'Exporting…';
-  exporting = true;
+  try {
+    if (!destDir) {
+      destDir = await window.rode.chooseDestination();
+      if (!destDir) return;
+    }
+    progress.classList.add('active');
+    card.querySelector('.progress-fill').style.width = '0%';
+    card.querySelector('.progress-label').textContent = '0%';
+    btn.textContent = 'Exporting…';
 
-  const res = await window.rode.exportSession({
-    chunkPaths: s.chunkPaths,
-    channels: s.channels,
-    channelKeys: [...st.channelKeys],
-    name: st.name,
-    format: st.format,
-    bitrate: st.bitrate,
-    normalize: st.normalize,
-    destDir,
-    totalDuration: s.totalDuration,
-  });
+    const res = await window.rode.exportSession({
+      chunkPaths: s.chunkPaths,
+      channels: s.channels,
+      channelKeys: [...st.channelKeys],
+      name: st.name,
+      format: st.format,
+      bitrate: st.bitrate,
+      normalize: st.normalize,
+      destDir,
+      totalDuration: s.totalDuration,
+    });
 
-  exporting = false;
-  btn.disabled = false;
-  btn.textContent = 'Export tracks';
-  progress.classList.remove('active');
-  if (res.ok) {
-    toast(`Exported ${res.files.length} track${res.files.length === 1 ? '' : 's'} to ${destDir}`);
-    window.rode.revealFile(res.files[0]);
-  } else {
-    toast(res.error, true);
+    if (res.ok) {
+      toast(`Exported ${res.files.length} track${res.files.length === 1 ? '' : 's'} to ${destDir}`);
+      window.rode.revealFile(res.files[0]);
+    } else {
+      toast(res.error, true);
+    }
+  } finally {
+    exporting = false;
+    setExportButtonsDisabled(false);
+    btn.textContent = 'Export tracks';
+    progress.classList.remove('active');
   }
 }
 

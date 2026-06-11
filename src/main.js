@@ -110,6 +110,7 @@ function readWavMeta(file) {
     let sampleRate = 0;
     let byteRate = 0;
     let dataSize = 0;
+    let dataOffset = 0;
     let dateTag = '';
 
     const hdr = Buffer.alloc(8);
@@ -129,6 +130,7 @@ function readWavMeta(file) {
         byteRate = fmt.readUInt32LE(8);
       } else if (id === 'data') {
         dataSize = size;
+        dataOffset = body;
         break; // data is last; everything else has been seen
       } else if (id === 'LIST' && size >= 4) {
         const list = Buffer.alloc(Math.min(size, 4096));
@@ -150,8 +152,15 @@ function readWavMeta(file) {
     }
 
     if (!channels) return null;
+    // A crash mid-record can leave a zero/garbage data size in the header;
+    // fall back to what's actually on disk so the recording stays usable.
+    let effectiveData = dataSize;
+    if (dataOffset) {
+      const onDisk = stat.size - dataOffset;
+      if (!dataSize || dataSize > onDisk) effectiveData = onDisk;
+    }
     return {
-      duration: byteRate ? dataSize / byteRate : 0,
+      duration: byteRate ? effectiveData / byteRate : 0,
       size: stat.size,
       channels,
       sampleRate,
@@ -171,6 +180,10 @@ function defaultSessionName(groupKey) {
   return `${datePart.replace(/\./g, '-')} ${timePart.replace(/\./g, ':')}`.trim() || 'Untitled session';
 }
 
+// Cache WAV metadata by size+mtime so the 3-second poll doesn't re-read
+// every header from the (possibly slow) card with sync I/O.
+let metaCache = new Map(); // file path -> { size, mtimeMs, info }
+
 ipcMain.handle('scan-sessions', async () => {
   const volume = findRodecasterVolume();
   if (!volume) return { mounted: false };
@@ -184,9 +197,21 @@ ipcMain.handle('scan-sessions', async () => {
   }
 
   const groups = new Map();
+  const freshCache = new Map();
   for (const name of names) {
     const full = path.join(dir, name);
-    const info = readWavMeta(full);
+    let stat;
+    try {
+      stat = fs.statSync(full);
+    } catch (_) {
+      continue;
+    }
+    const cached = metaCache.get(full);
+    const info =
+      cached && cached.size === stat.size && cached.mtimeMs === stat.mtimeMs
+        ? cached.info
+        : readWavMeta(full);
+    freshCache.set(full, { size: stat.size, mtimeMs: stat.mtimeMs, info });
     if (!info) continue;
     const parts = info.dateTag.split(';');
     const letter = parts.length >= 3 ? parts[2].trim() : '';
@@ -194,6 +219,7 @@ ipcMain.handle('scan-sessions', async () => {
     if (!groups.has(groupKey)) groups.set(groupKey, []);
     groups.get(groupKey).push({ path: full, name, letter, ...info });
   }
+  metaCache = freshCache; // drop entries for files no longer on the card
 
   const sessions = [];
   for (const [groupKey, chunks] of groups) {
@@ -238,20 +264,14 @@ ipcMain.handle('reveal-file', (_event, filePath) => shell.showItemInFolder(fileP
 
 // ---------- Per-channel analysis (which tracks have signal) ----------
 
-ipcMain.handle('analyze-session', async (_event, { chunkPaths, channels }) => {
-  const map = channelMapFor(channels);
-  const probeFile = chunkPaths[0];
-  // Sample a 30s window. Skip a lead-in on long files, but clamp so we stay
-  // inside short ones (e.g. brief test recordings).
-  const info = readWavMeta(probeFile);
-  const dur = info?.duration || 0;
-  const window = Math.min(30, dur || 30);
-  const sampleStart = dur > 90 ? 60 : 0;
+// Measure per-channel RMS over a window of one file. Resolves { rms } keyed by
+// 1-based channel number, or { error } if ffmpeg can't run.
+function probeRms(file, start, window) {
   return new Promise((resolve) => {
     const proc = spawn(FFMPEG, [
       '-v', 'info', '-nostats',
-      '-ss', String(sampleStart), '-t', String(window),
-      '-i', probeFile,
+      '-ss', String(start), '-t', String(window),
+      '-i', file,
       '-af', 'astats=metadata=0',
       '-f', 'null', '-',
     ]);
@@ -265,21 +285,47 @@ ipcMain.handle('analyze-session', async (_event, { chunkPaths, channels }) => {
       while ((m = re.exec(buf))) {
         rms[parseInt(m[1], 10)] = m[2] === '-inf' ? -Infinity : parseFloat(m[2]);
       }
-      const active = {};
-      for (const c of map) {
-        const level = Math.max(...c.idx.map((i) => rms[i + 1] ?? -Infinity));
-        active[c.key] = { active: level > -70, level: level === -Infinity ? null : level };
-      }
-      resolve({ ok: true, active });
+      resolve({ rms });
     });
-    proc.on('error', (err) => resolve({ ok: false, error: err.message }));
+    proc.on('error', (err) => resolve({ error: err.message }));
   });
+}
+
+ipcMain.handle('analyze-session', async (_event, { chunkPaths, channels }) => {
+  const map = channelMapFor(channels);
+
+  // Sample several 30s windows spread across the session — first, middle and
+  // last chunks, two positions each — so someone who is quiet at the start
+  // (or only appears in a later chunk) still registers as active.
+  const picks = [...new Set([0, Math.floor((chunkPaths.length - 1) / 2), chunkPaths.length - 1])];
+  const points = [];
+  for (const i of picks) {
+    const file = chunkPaths[i];
+    const dur = readWavMeta(file)?.duration || 0;
+    const window = Math.min(30, dur || 30);
+    const starts = dur > 2 * window ? [Math.floor(dur * 0.2), Math.floor(dur * 0.7)] : [0];
+    for (const start of starts) points.push({ file, start, window });
+  }
+
+  const results = await Promise.all(points.map((p) => probeRms(p.file, p.start, p.window)));
+  const valid = results.filter((r) => r.rms);
+  if (valid.length === 0) {
+    return { ok: false, error: results[0]?.error || 'Track analysis failed.' };
+  }
+
+  // A track is active if it has signal in any sampled window.
+  const active = {};
+  for (const c of map) {
+    const level = Math.max(...valid.flatMap((r) => c.idx.map((i) => r.rms[i + 1] ?? -Infinity)));
+    active[c.key] = { active: level > -70, level: level === -Infinity ? null : level };
+  }
+  return { ok: true, active };
 });
 
 // ---------- Per-channel multitrack export ----------
 
 function codecArgs(format, bitrate) {
-  const br = (bitrate || 192) + 'k';
+  const br = (bitrate || 128) + 'k'; // matches the renderer's default
   switch (format) {
     case 'mp3':
       return { ext: '.mp3', args: ['-c:a', 'libmp3lame', '-b:a', br] };
@@ -307,33 +353,45 @@ ipcMain.handle(
     const normFilter = normalize && format !== 'wav' ? ',loudnorm=I=-16:TP=-1.5:LRA=11' : '';
     const safe = sanitize(name);
 
-    // Build the filtergraph: concat all chunks -> split N ways -> pan each track out.
+    // Build the filtergraph: split each chunk per track -> pan -> concat per track.
+    // Pan must come before concat: the 14-channel files carry no channel layout,
+    // and concat refuses unknown layouts ("Unknown channel layouts not supported").
+    // Panning first hands concat plain mono/stereo streams.
     const inputs = [];
     chunkPaths.forEach((p) => inputs.push('-i', p));
 
-    let filter;
     const n = chunkPaths.length;
-    if (n > 1) {
-      const concatIn = chunkPaths.map((_, i) => `[${i}:a]`).join('');
-      filter = `${concatIn}concat=n=${n}:v=0:a=1[full];`;
-    } else {
-      filter = `[0:a]anull[full];`;
-    }
-    const splitLabels = map.map((_, i) => `[s${i}]`).join('');
-    filter += `[full]asplit=${map.length}${splitLabels};`;
-    map.forEach((c, i) => {
+    const parts = [];
+    chunkPaths.forEach((_, i) => {
+      const splits = map.map((_, t) => `[c${i}t${t}]`).join('');
+      parts.push(`[${i}:a]asplit=${map.length}${splits}`);
+    });
+    map.forEach((c, t) => {
       const pan =
         c.idx.length === 1
           ? `mono|c0=c${c.idx[0]}`
           : `stereo|c0=c${c.idx[0]}|c1=c${c.idx[1]}`;
-      filter += `[s${i}]pan=${pan}${normFilter}[o${i}];`;
+      if (n === 1) {
+        parts.push(`[c0t${t}]pan=${pan}${normFilter}[o${t}]`);
+      } else {
+        chunkPaths.forEach((_, i) => parts.push(`[c${i}t${t}]pan=${pan}[p${i}t${t}]`));
+        const segs = chunkPaths.map((_, i) => `[p${i}t${t}]`).join('');
+        parts.push(`${segs}concat=n=${n}:v=0:a=1${normFilter}[o${t}]`);
+      }
     });
-    filter = filter.replace(/;$/, '');
+    const filter = parts.join(';');
+
+    // Never overwrite existing files — suffix the name until the whole set is clean.
+    const fileFor = (base, label) => path.join(destDir, `${base} - ${label}${ext}`);
+    let base = safe;
+    for (let k = 2; map.some((c) => fs.existsSync(fileFor(base, c.label))); k++) {
+      base = `${safe} (${k})`;
+    }
 
     const outputs = [];
     const destFiles = [];
     map.forEach((c, i) => {
-      const dest = path.join(destDir, `${safe} - ${c.label}${ext}`);
+      const dest = fileFor(base, c.label);
       destFiles.push(dest);
       outputs.push('-map', `[o${i}]`, ...codec, '-y', dest);
     });
