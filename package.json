@@ -6,7 +6,9 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "package": "electron-packager . 'Caster Companion' --platform=darwin --arch=arm64 --out=dist --overwrite"
+    "package": "electron-packager . 'Caster Companion' --platform=darwin --arch=arm64 --out=dist --overwrite",
+    "build-app": "npm run package && rm -rf '/Applications/Caster Companion.app' && cp -R 'dist/Caster Companion-darwin-arm64/Caster Companion.app' /Applications/ && open /Applications",
+    "setup": "npm install && npm run build-app"
   },
   "license": "MIT",
   "keywords": [

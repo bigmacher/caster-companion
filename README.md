@@ -14,22 +14,28 @@ rebuilt so it runs without Rosetta.
 
 ---
 
-## Quick start — turn this repo into an app
+## Quick start — build your own app
+
+There is **no prebuilt download.** You build the app yourself, once, from this
+source — then it lives in your Applications folder like any other Mac app and
+you never touch the terminal again.
 
 You need an Apple Silicon Mac and [Node.js](https://nodejs.org). Then, in the
-downloaded repo folder:
+downloaded repo folder, pick either:
+
+**Easiest — double-click the installer:** double-click **`install.command`** in
+Finder. It builds the app and installs it to your Applications folder.
+
+**Or one terminal command:**
 
 ```sh
-npm install            # one-time: fetch dependencies
-npm run package        # build the app
+npm run setup
 ```
 
-That produces **`dist/Caster Companion-darwin-arm64/Caster Companion.app`**.
-Drag it into your **Applications** folder. From then on it's a normal Mac app —
-double-click it (or keep it in your Dock); no terminal needed again.
-
-ffmpeg is **bundled inside the app** — there's nothing else to install. Full
-details and the run-from-source path are in [Install & run](#install--run).
+Either way you end up with **Caster Companion** in `/Applications` — launch it
+from there or drag it to your Dock. ffmpeg is **bundled inside the app**, so
+there's nothing else to install. Details and the run-from-source path are in
+[Install & run](#install--run).
 
 ---
 
@@ -97,19 +103,20 @@ no separate `ffprobe` is needed either.
 
 ## Install & run
 
-### Option A — standalone app (recommended for everyday use)
+### Option A — build the standalone app (recommended)
 
-Build the double-clickable `.app` once, then keep it in your Applications folder
-and Dock like any other app:
+The double-click `install.command`, or `npm run setup`, does this end to end:
+fetches dependencies, builds the app, and installs it to `/Applications`. To do
+the same steps by hand:
 
 ```sh
 npm install
-npm run package        # -> dist/Caster Companion-darwin-arm64/Caster Companion.app
+npm run build-app      # builds and copies to /Applications
 ```
 
-Drag `dist/Caster Companion-darwin-arm64/Caster Companion.app` into
-`/Applications`. Because you built it locally there's no Gatekeeper quarantine,
-so it opens with a normal double-click — no terminal needed afterward.
+(`npm run package` alone just builds into `dist/` without installing.) Because
+you build it locally there's no Gatekeeper quarantine, so it opens with a normal
+double-click — no terminal needed afterward.
 
 ### Option B — run from source (for development)
 
@@ -118,20 +125,20 @@ npm install
 npm start
 ```
 
-## Notes on distribution
+## Notes
 
 - **Self-contained.** ffmpeg is bundled, so the built app needs nothing else
   installed to run. (If a system ffmpeg is somehow preferred for development,
   `src/main.js` falls back to `/opt/homebrew/bin/ffmpeg` only when the bundled
   binary is missing.)
-- **Not code-signed / notarized.** A locally built app runs fine for you. A copy
-  *downloaded* from someone else gets a Gatekeeper quarantine flag, so the first
-  launch needs a right-click → Open (or removing the flag with
-  `xattr -dr com.apple.quarantine "Caster Companion.app"`). To avoid that step
-  entirely you'd sign and notarize with an Apple Developer ID.
-- **ffmpeg licensing.** `ffmpeg-static` ships a GPL build of ffmpeg. That's fine
-  for personal use; if you distribute the app publicly, comply with the GPL
-  (e.g. offer the corresponding ffmpeg source / build info).
+- **No prebuilt binary, by design.** This repo ships source only — everyone
+  builds their own copy from it. A locally built app has no Gatekeeper
+  quarantine and opens with a normal double-click, so there's no code-signing or
+  Apple Developer ID involved. (Signing/notarization only matters for handing
+  people a *prebuilt download*, which this project intentionally doesn't do.)
+- **ffmpeg licensing.** `ffmpeg-static` ships a GPL build of ffmpeg, included in
+  each locally built app. That's fine for personal/source-built use; the bundled
+  ffmpeg's source is available from the FFmpeg project.
 
 ## How to use it
 
