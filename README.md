@@ -68,26 +68,44 @@ the project.
 ## Requirements
 
 - Apple Silicon Mac, macOS 11 or later
-- [ffmpeg](https://ffmpeg.org) at `/opt/homebrew/bin/ffmpeg` (used for the
-  channel split, chunk join, and format conversion): `brew install ffmpeg`
-- Node.js (only to run from source / build)
+- [ffmpeg](https://ffmpeg.org) at `/opt/homebrew/bin/ffmpeg` — used for the
+  channel split, chunk join, and format conversion. Install with
+  `brew install ffmpeg`. **This is required even when using the packaged app**
+  (ffmpeg is not bundled yet — see [Notes](#notes-on-distribution)).
+- Node.js — only needed to run from source or build the app.
 
-## Run from source
+## Install & run
+
+### Option A — standalone app (recommended for everyday use)
+
+Build the double-clickable `.app` once, then keep it in your Applications folder
+and Dock like any other app:
+
+```sh
+npm install
+npm run package        # -> dist/Caster Companion-darwin-arm64/Caster Companion.app
+```
+
+Drag `dist/Caster Companion-darwin-arm64/Caster Companion.app` into
+`/Applications`. Because you built it locally there's no Gatekeeper quarantine,
+so it opens with a normal double-click — no terminal needed afterward.
+
+### Option B — run from source (for development)
 
 ```sh
 npm install
 npm start
 ```
 
-## Build a standalone .app
+## Notes on distribution
 
-```sh
-npm run package      # -> dist/Caster Companion-darwin-arm64/Caster Companion.app
-```
-
-Drag the resulting `.app` into `/Applications`. (For distribution to other Macs
-you would also need to code-sign and notarize it; unsigned, users must
-right-click → Open the first time.)
+- **ffmpeg is not bundled.** The app calls the system ffmpeg at
+  `/opt/homebrew/bin/ffmpeg`. That's fine on your own machine; to give the app
+  to someone else, either have them `brew install ffmpeg`, or bundle a static
+  ffmpeg into the app's Resources and point `FFMPEG` in `src/main.js` at it.
+- **Not code-signed / notarized.** A locally built app runs fine for you. To
+  distribute to other Macs without the right-click → Open step, you'd need an
+  Apple Developer ID signature and notarization.
 
 ## How to use it
 
