@@ -9,13 +9,21 @@
     "package": "electron-packager . 'Caster Companion' --platform=darwin --arch=arm64 --out=dist --overwrite"
   },
   "license": "MIT",
-  "keywords": ["rodecaster", "podcast", "multitrack", "electron", "apple-silicon", "audio"],
+  "keywords": [
+    "rodecaster",
+    "podcast",
+    "multitrack",
+    "electron",
+    "apple-silicon",
+    "audio"
+  ],
   "devDependencies": {
     "electron": "^33.0.0",
     "electron-packager": "^17.1.2",
     "playwright-core": "^1.60.0"
   },
   "dependencies": {
+    "ffmpeg-static": "^5.3.0",
     "node-hid": "^3.1.0"
   }
 }

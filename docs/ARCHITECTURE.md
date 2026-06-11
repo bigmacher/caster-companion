@@ -32,9 +32,11 @@ through `preload.js` and IPC to the main process.
 ## Session scanning
 
 `scan-sessions` lists `RODE/PODCASTS/*.WAV` (falling back to the volume root),
-runs `ffprobe -of json` on each to read duration, size, channel count, and the
-`date` tag, then groups by the `date;time` prefix and sorts chunks by their
-trailing letter. The channel map (9 named tracks for 14-channel files, just
+reads each file's metadata with `readWavMeta()` — a small native RIFF-header
+parser (no external `ffprobe`) that pulls duration, size, channel count, and the
+`date`/`ICRD` tag while reading only the header chunks, never the multi-GB audio
+data — then groups by the `date;time` prefix and sorts chunks by their trailing
+letter. The channel map (9 named tracks for 14-channel files, just
 Stereo Mix for 2-channel files) is attached to each session. See
 [PROTOCOL.md](PROTOCOL.md) for the format details.
 
@@ -43,6 +45,10 @@ set of sessions changes (a cheap fingerprint of ids + sizes), so plugging the
 card in or pulling it out updates the UI automatically without flicker.
 
 ## The export filtergraph
+
+All audio work uses the **bundled** `ffmpeg-static` binary (resolved by
+`resolveFfmpeg()` in `src/main.js`, with a system-ffmpeg fallback for dev), so
+the shipped app has no external runtime dependency.
 
 The heart of the app is one ffmpeg invocation per session that reads each chunk
 **once** and writes every selected track. For chunks `c0…cN` and selected

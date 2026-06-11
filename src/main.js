@@ -6,8 +6,27 @@ const os = require('os');
 
 const RODE_VENDOR_ID = 0x19f7;
 const VOLUME_NAMES = ['RODECASTER', 'RØDECASTER'];
-const FFMPEG = '/opt/homebrew/bin/ffmpeg';
-const FFPROBE = '/opt/homebrew/bin/ffprobe';
+
+// Bundled, self-contained ffmpeg (ffmpeg-static). In a packaged app the path
+// can point inside app.asar, which isn't executable — rewrite it to the
+// unpacked copy. Fall back to a system ffmpeg for dev if needed.
+function resolveFfmpeg() {
+  let p;
+  try {
+    p = require('ffmpeg-static');
+  } catch (_) {
+    p = null;
+  }
+  if (p && p.includes('app.asar' + path.sep)) {
+    p = p.replace('app.asar' + path.sep, 'app.asar.unpacked' + path.sep);
+  }
+  if (p && fs.existsSync(p)) return p;
+  for (const sys of ['/opt/homebrew/bin/ffmpeg', '/usr/local/bin/ffmpeg', '/usr/bin/ffmpeg']) {
+    if (fs.existsSync(sys)) return sys;
+  }
+  return p || 'ffmpeg';
+}
+const FFMPEG = resolveFfmpeg();
 
 // 14-channel multitrack layout for the gen-1 RODECaster Pro.
 // Channel indices are 0-based, matching ffmpeg pan filter `cN` references.
@@ -72,35 +91,77 @@ function podcastsDir(volume) {
   return fs.existsSync(nested) ? nested : volume;
 }
 
-function ffprobeInfo(file) {
-  return new Promise((resolve) => {
-    execFile(
-      FFPROBE,
-      [
-        '-v', 'error',
-        '-show_entries', 'format=duration,size:format_tags=date:stream=channels,sample_rate',
-        '-of', 'json',
-        file,
-      ],
-      { maxBuffer: 4 * 1024 * 1024 },
-      (err, stdout) => {
-        if (err) return resolve(null);
-        try {
-          const j = JSON.parse(stdout);
-          const stream = (j.streams || [])[0] || {};
-          resolve({
-            duration: parseFloat(j.format?.duration) || 0,
-            size: parseInt(j.format?.size, 10) || 0,
-            channels: stream.channels || 0,
-            sampleRate: parseInt(stream.sample_rate, 10) || 0,
-            dateTag: (j.format?.tags?.date || '').trim(),
-          });
-        } catch (_) {
-          resolve(null);
+// Read WAV metadata directly from the RIFF header — no external ffprobe needed.
+// We only read chunk headers (plus the small `fmt ` and `LIST/INFO` chunks),
+// never the multi-GB audio data, so this is fast even on huge files.
+// Returns { duration, size, channels, sampleRate, dateTag } or null.
+function readWavMeta(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const stat = fs.fstatSync(fd);
+    const head = Buffer.alloc(12);
+    fs.readSync(fd, head, 0, 12, 0);
+    if (head.toString('ascii', 0, 4) !== 'RIFF' || head.toString('ascii', 8, 12) !== 'WAVE') {
+      return null;
+    }
+
+    let channels = 0;
+    let sampleRate = 0;
+    let byteRate = 0;
+    let dataSize = 0;
+    let dateTag = '';
+
+    const hdr = Buffer.alloc(8);
+    let offset = 12;
+    // Cap header scanning; the `data` chunk is last in these files so we break there anyway.
+    while (offset + 8 <= stat.size) {
+      if (fs.readSync(fd, hdr, 0, 8, offset) < 8) break;
+      const id = hdr.toString('ascii', 0, 4);
+      const size = hdr.readUInt32LE(4);
+      const body = offset + 8;
+
+      if (id === 'fmt ') {
+        const fmt = Buffer.alloc(Math.min(size, 16));
+        fs.readSync(fd, fmt, 0, fmt.length, body);
+        channels = fmt.readUInt16LE(2);
+        sampleRate = fmt.readUInt32LE(4);
+        byteRate = fmt.readUInt32LE(8);
+      } else if (id === 'data') {
+        dataSize = size;
+        break; // data is last; everything else has been seen
+      } else if (id === 'LIST' && size >= 4) {
+        const list = Buffer.alloc(Math.min(size, 4096));
+        fs.readSync(fd, list, 0, list.length, body);
+        if (list.toString('ascii', 0, 4) === 'INFO') {
+          let p = 4;
+          while (p + 8 <= list.length) {
+            const subId = list.toString('ascii', p, p + 4);
+            const subSize = list.readUInt32LE(p + 4);
+            if (subId === 'ICRD') {
+              dateTag = list.toString('ascii', p + 8, p + 8 + subSize).replace(/\0+$/, '').trim();
+              break;
+            }
+            p += 8 + subSize + (subSize & 1);
+          }
         }
       }
-    );
-  });
+      offset = body + size + (size & 1); // chunks are word-aligned
+    }
+
+    if (!channels) return null;
+    return {
+      duration: byteRate ? dataSize / byteRate : 0,
+      size: stat.size,
+      channels,
+      sampleRate,
+      dateTag,
+    };
+  } catch (_) {
+    return null;
+  } finally {
+    if (fd !== undefined) fs.closeSync(fd);
+  }
 }
 
 // Group POD files into sessions using the embedded `date` tag:
@@ -125,7 +186,7 @@ ipcMain.handle('scan-sessions', async () => {
   const groups = new Map();
   for (const name of names) {
     const full = path.join(dir, name);
-    const info = await ffprobeInfo(full);
+    const info = readWavMeta(full);
     if (!info) continue;
     const parts = info.dateTag.split(';');
     const letter = parts.length >= 3 ? parts[2].trim() : '';
@@ -182,7 +243,7 @@ ipcMain.handle('analyze-session', async (_event, { chunkPaths, channels }) => {
   const probeFile = chunkPaths[0];
   // Sample a 30s window. Skip a lead-in on long files, but clamp so we stay
   // inside short ones (e.g. brief test recordings).
-  const info = await ffprobeInfo(probeFile);
+  const info = readWavMeta(probeFile);
   const dur = info?.duration || 0;
   const window = Math.min(30, dur || 30);
   const sampleStart = dur > 90 ? 60 : 0;

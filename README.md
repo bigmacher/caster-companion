@@ -16,8 +16,8 @@ rebuilt so it runs without Rosetta.
 
 ## Quick start — turn this repo into an app
 
-You need an Apple Silicon Mac, [Node.js](https://nodejs.org), and ffmpeg
-(`brew install ffmpeg`). Then, in the downloaded repo folder:
+You need an Apple Silicon Mac and [Node.js](https://nodejs.org). Then, in the
+downloaded repo folder:
 
 ```sh
 npm install            # one-time: fetch dependencies
@@ -28,8 +28,8 @@ That produces **`dist/Caster Companion-darwin-arm64/Caster Companion.app`**.
 Drag it into your **Applications** folder. From then on it's a normal Mac app —
 double-click it (or keep it in your Dock); no terminal needed again.
 
-Full details and the run-from-source path are in
-[Install & run](#install--run) below.
+ffmpeg is **bundled inside the app** — there's nothing else to install. Full
+details and the run-from-source path are in [Install & run](#install--run).
 
 ---
 
@@ -87,11 +87,13 @@ the project.
 ## Requirements
 
 - Apple Silicon Mac, macOS 11 or later
-- [ffmpeg](https://ffmpeg.org) at `/opt/homebrew/bin/ffmpeg` — used for the
-  channel split, chunk join, and format conversion. Install with
-  `brew install ffmpeg`. **This is required even when using the packaged app**
-  (ffmpeg is not bundled yet — see [Notes](#notes-on-distribution)).
-- Node.js — only needed to run from source or build the app.
+- Node.js — only needed to *build* the app or run from source. The finished
+  app has no runtime dependencies.
+
+ffmpeg (used for the channel split, chunk join, and format conversion) is
+bundled via [`ffmpeg-static`](https://www.npmjs.com/package/ffmpeg-static) and
+shipped inside the app. WAV metadata is read directly from the file headers, so
+no separate `ffprobe` is needed either.
 
 ## Install & run
 
@@ -118,13 +120,18 @@ npm start
 
 ## Notes on distribution
 
-- **ffmpeg is not bundled.** The app calls the system ffmpeg at
-  `/opt/homebrew/bin/ffmpeg`. That's fine on your own machine; to give the app
-  to someone else, either have them `brew install ffmpeg`, or bundle a static
-  ffmpeg into the app's Resources and point `FFMPEG` in `src/main.js` at it.
-- **Not code-signed / notarized.** A locally built app runs fine for you. To
-  distribute to other Macs without the right-click → Open step, you'd need an
-  Apple Developer ID signature and notarization.
+- **Self-contained.** ffmpeg is bundled, so the built app needs nothing else
+  installed to run. (If a system ffmpeg is somehow preferred for development,
+  `src/main.js` falls back to `/opt/homebrew/bin/ffmpeg` only when the bundled
+  binary is missing.)
+- **Not code-signed / notarized.** A locally built app runs fine for you. A copy
+  *downloaded* from someone else gets a Gatekeeper quarantine flag, so the first
+  launch needs a right-click → Open (or removing the flag with
+  `xattr -dr com.apple.quarantine "Caster Companion.app"`). To avoid that step
+  entirely you'd sign and notarize with an Apple Developer ID.
+- **ffmpeg licensing.** `ffmpeg-static` ships a GPL build of ffmpeg. That's fine
+  for personal use; if you distribute the app publicly, comply with the GPL
+  (e.g. offer the corresponding ffmpeg source / build info).
 
 ## How to use it
 
