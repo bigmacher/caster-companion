@@ -20,7 +20,7 @@ through `preload.js` and IPC to the main process.
 
 | Method | Main handler | Purpose |
 |---|---|---|
-| `scanSessions()` | `scan-sessions` | Find the card, ffprobe every `POD*.WAV`, group into sessions. |
+| `scanSessions()` | `scan-sessions` | Find the card, read each `POD*.WAV` header, group into sessions. |
 | `analyzeSession({chunkPaths, channels})` | `analyze-session` | Measure per-channel RMS on a sample → which tracks have signal. |
 | `exportSession({…})` | `export-session` | Concat chunks + split channels + encode, with progress events. |
 | `chooseDestination()` | `choose-destination` | Native folder picker. |
