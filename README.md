@@ -49,10 +49,12 @@ Electron + ffmpeg and runs natively on `arm64`.
     Settings) for a ready-to-publish file.
 
 ### Sounds — device detection only
-Uploading audio to the sound pads uses a proprietary USB HID protocol that has
-not been decoded. This tab detects your connected RØDECaster and shows its USB
-IDs, but cannot upload sounds yet. See [docs/SOUND-PADS.md](docs/SOUND-PADS.md)
-for the full status and the path to building it.
+Two original-app features rely on RØDE's proprietary USB HID protocol and are
+**not** implemented: uploading audio to the sound pads, and toggling Podcast
+Transfer Mode from the app (you do that on the device's touchscreen instead).
+The Sounds tab detects your connected RØDECaster and shows its USB IDs so you
+can confirm it's seen. See [docs/SOUND-PADS.md](docs/SOUND-PADS.md) for the full
+status and a concrete path to decoding the HID protocol.
 
 ## Safety
 

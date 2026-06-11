@@ -1,4 +1,25 @@
-# Sound-pad upload — status & feasibility
+# HID-only features (sound pads, app-side Transfer Mode) — status & feasibility
+
+Two features of the original app depend on RØDE's proprietary USB **HID**
+protocol, and neither is implemented here:
+
+1. **Sound-pad upload** — loading audio onto the pads.
+2. **Toggling Podcast Transfer Mode from the app** — the original had an in-app
+   switch that put the device into/out of transfer mode. That switch sends a
+   vendor HID command to the device, so it sits in exactly the same undecoded
+   bucket as sound-pad upload.
+
+Caster Companion handles (2) differently: you enable Transfer Mode on the
+device's own touchscreen (tap the SD-card icon), which needs no app at all, and
+the Podcasts tab auto-detects the card the moment it mounts. So the app-side
+toggle is a convenience we lose, not lost functionality — the underlying action
+is one tap on the hardware.
+
+The rest of this document focuses on sound-pad upload, but the **same USB
+capture work below would also reveal the Transfer Mode command** (it's likely a
+single short report — easy to spot in a capture).
+
+## Sound-pad upload
 
 **Status: not implemented.** The Sounds tab currently only *detects* the device.
 
