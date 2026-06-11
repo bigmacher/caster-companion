@@ -1,7 +1,7 @@
 {
   "name": "caster-companion",
   "productName": "Caster Companion",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Unofficial Apple Silicon companion app for the original RØDECaster Pro — multitrack podcast export from the microSD card.",
   "main": "src/main.js",
   "scripts": {
